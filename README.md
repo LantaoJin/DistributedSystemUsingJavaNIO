@@ -1,3 +1,4 @@
+
 手把手写一个高性能Java NIO框架
 =============================
 
@@ -27,8 +28,11 @@ SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 register方法的第二个参数**SelectionKey.OP_READ**代表的是通过Selector来监听我们感兴趣的事件，这类事件有：
 
 > Connect
+
 > Accept
+
 > Read
+
 > Write
 
 当某个Channel上“发生”以上事件时，通常表示Channel be ready for那个事件。
@@ -65,6 +69,7 @@ while(keyIterator.hasNext()) {
 * Channel和Buffer的关系
 
 NIO的数据必须用Buffer对象“包裹”起来，数据从Channel里**读**出来首先会**写**入Buffer，要**写**入Channel的数据也必须先从Buffer中**读**出：
+
 ![enter image description here](http://tutorials.jenkov.com/images/java-nio/overview-channels-buffers.png)
 
 使用Buffer来读写数据的步骤可以简单分为4步：
@@ -73,6 +78,10 @@ NIO的数据必须用Buffer对象“包裹”起来，数据从Channel里**读**
  2. 调用buffer.flip() （Buffer进入读模式）
  3. 从Buffer中读数据写入Channel
  4. 调用buffer.clear()或buffer.compact() （Buffer进入写模式）
+
+Buffer操作指针如下：
+
+![enter image description here](https://javapapers.com/wp-content/uploads/2015/08/JavaNIOBuffer.png)
 
 一个简单的例子：
 ```
@@ -717,6 +726,27 @@ OP_WRITE造成CPU100%是一个场景问题。首先要理解OP_WRITE的触发条
 正确的处理方式：
  - 触发之后立即取消注册，否则会继续触发导致循环
 
+```
+    private void doWrite(SelectionKey key) throws IOException {
+        try {
+            key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+        } catch (CancelledKeyException e) {
+            LOG.warn("Exception while server writing." + e);
+        }
+        Connection connection = (Connection) key.attachment();
+        
+        connection.write();
+        if (!connection.writeComplete()) {
+            // socket buffer is full, register OP_WRITE, wait for next write
+            try {
+                key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
+            } catch (CancelledKeyException e) {
+                LOG.warn("Exception while server writing." + e);
+            }
+        }
+    }
+```
+
 处理完成后视情况决定是否继续注册
  - 没有完全写入，继续注册
  - 全部写入，无需注册
@@ -732,3 +762,4 @@ SocketChannel.connect方法在非阻塞模式下可能返回false，切记判断
 ## 八、写在最后
 
 尽量不要自己实现nio框架，除非有经验丰富的工程师，推荐Netty
+
